@@ -27,10 +27,13 @@ int main(void)
 {
 	LED_DIR |= _BV(LED_BIT);
 	LED_PORT ^= _BV(LED_BIT);
+	
+	// wdt_enable(WDTO_250MS);
 
-	wdt_enable(WDTO_250MS);
-
-	while (1); /* Watchdog bite */
+	while (1) {
+		_delay_ms(1000);
+		LED_PORT ^= _BV(LED_BIT);
+	}
 
 	return 0;
 }
