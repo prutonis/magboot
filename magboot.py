@@ -45,47 +45,50 @@ devicelist = {
 
 def usage(*args):
     sys.stdout = sys.stderr
-    print __doc__
+    print(__doc__)
     for msg in args:
-        print msg
+        print(msg)
     sys.exit(2)
 
 
-def do_cmd(str, expect_reply=True):
-    ser.write(str)
+def do_cmd(val, expect_reply=True):
+    if isinstance(val, str):
+        val = val.encode('latin1')
+    ser.write(val)
     if not expect_reply:
-        print "> OK"
+        print("> OK")
         return
 
     reply = ser.read()
     if (len(reply) == 0):
-        print "> FAILED (TIMEOUT)"
+        print("> FAILED (TIMEOUT)")
         sys.exit(1)
-
+    reply = reply.decode()
     if (reply == 'Y'):
-        print "> OK"
+        print("> OK")
         return
 
     if (reply == 'N'):
-        print "> FAILED"
+        print("> FAILED")
     else:
-        print "> FAILED (UNKNOWN):"
+        print("> FAILED (UNKNOWN):")
         while (len(reply) == 1):
-            print reply
+            print(reply)
             reply = ser.read()
     sys.exit(1)
 
 
 def cmd_device_id():
-    print "ID"
+    print("ID")
     do_cmd('I' + dev['signature'])
 
 
 def cmd_load_addr(addr):
-    print "LOAD_ADDR"
+    print("LOAD_ADDR")
     # Little-endian, 16-bit uint load address
     load_addr = pack('<H', addr)
-    do_cmd('A' + load_addr)
+    print(load_addr)
+    do_cmd(b'A' + load_addr)
 
 
 def checksum(data):
@@ -102,49 +105,47 @@ def checksum(data):
 
 
 def cmd_write_file(fname):
-    print "WRITE_FILE"
+    print("WRITE_FILE")
 
-    if (fname == "-"):
+    if fname == "-":
         f = sys.stdin
     else:
         f = open(fname, "rb")
 
     eof = False
-
     cmd_load_addr(0)
 
-    while (not eof):
-        buf = array('c')
+    while not eof:
+        buf = array('B')  # Create an array of unsigned bytes
         bytecount = 0
-        while (bytecount < dev['pagesize']):
-            data = f.read(1)
-            if (len(data) == 0):
+        while bytecount < dev['pagesize']:
+            data = f.read(1)  # Read 1 byte
+            if len(data) == 0:  # End of file
                 eof = True
                 break
-            buf.append(data)
-            bytecount = bytecount + 1
+            buf.append(data[0])  # Append the byte (data[0] is an integer)
+
+            bytecount += 1
 
         # Zerofill remaining part of page
-        if (bytecount != dev['pagesize']):
-            while (bytecount < dev['pagesize']):
-                buf.append(chr(0))
-                bytecount = bytecount + 1
+        while bytecount < dev['pagesize']:
+            buf.append(0)  # Append 0 to fill the remaining space
+            bytecount += 1
 
-        bufstr = buf.tostring()
+        bufstr = bytes(buf)  # Convert array to bytes
         csum = checksum(bufstr)
-        do_cmd('W' + csum + bufstr)
-
+        do_cmd(b'W' + csum + bufstr)
 
 def cmd_reset():
-    print "RESET"
+    print("RESET")
     do_cmd('R', False)
 
 
 def cmd_wait():
-    print "WAIT"
+    print("WAIT")
     while True:
         sys.stdout.flush()
-        ser.write('I' + dev['signature'])
+        ser.write(('I' + dev['signature']).encode('latin1'))
         data = ser.read()
         if (len(data) == 1 and data == 'Y'):
             break
@@ -159,14 +160,14 @@ if __name__ == "__main__":
     try:
         dev = devicelist[sys.argv[2]]
     except KeyError:
-        print "Unsupported device '" + sys.argv[2] + "'"
+        print("Unsupported device '" + sys.argv[2] + "'")
         sys.exit(3)
 
     ser = serial.Serial(port=sys.argv[1], baudrate=19200, timeout=1)
 
     try:
         opts, args = getopt.getopt(sys.argv[3:], 'a:w:ijrz')
-    except getopt.error, msg:
+    except getopt.error as msg:
         usage(msg)
 
     ser.flushInput()
